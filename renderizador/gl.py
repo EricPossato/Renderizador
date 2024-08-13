@@ -106,8 +106,40 @@ class GL:
         print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
         print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        # Exemplo:
-        gpu.GPU.draw_pixel([6, 8], gpu.GPU.RGB8, [255, 255, 0])  # altera pixel (u, v, tipo, r, g, b)
+        emissiva = colors['emissiveColor']
+        emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
+
+        def L(p0x, p0y, p1x, p1y):
+
+            x = p1y - p0y
+            y = - (p1x - p0x)
+            n = p0y * (p1x - p0x) - p0x*(p1y - p0y)
+
+            return(x,y,n)
+        
+        for i in range(0, len(vertices), 6):
+            L1 = L(vertices[i], vertices[i+1], vertices[i+2], vertices[i+3])
+            L2 = L(vertices[i+2], vertices[i+3], vertices[i+4], vertices[i+5])
+            L3 = L(vertices[i+4], vertices[i+5], vertices[i], vertices[i+1])
+
+        def calcL(L,ponto):
+            return L[0]*ponto[0] + L[1]*ponto[1] + L[2]
+
+        def inside(L1, L2, L3, ponto):
+            v1 = calcL(L1,ponto)
+            v2 = calcL(L2, ponto)
+            v3 = calcL(L3, ponto)
+            if (v1 >= 0) and (v2 >=0) and (v3 >= 0):
+                return True
+            else:
+                return False
+        
+        for i in range(0, len(vertices), 3):
+            for x in range(0, GL.width):
+                for y in range(0, GL.height):
+                    if inside(L1, L2, L3, (x,y)):
+                        gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
+        
 
 
     @staticmethod
