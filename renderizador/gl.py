@@ -71,11 +71,33 @@ class GL:
 
         print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
         print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
-        
-        # Exemplo:
-        pos_x = GL.width//2
-        pos_y = GL.height//2
-        gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [255, 0, 255])  # altera pixel (u, v, tipo, r, g, b)
+
+        emissiva = colors['emissiveColor']
+        emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
+
+        for i in range(0, len(lineSegments), 4):
+            p0x = int(lineSegments[i])
+            p0y = int(lineSegments[i+1])
+            p1x = int(lineSegments[i+2])
+            p1y = int(lineSegments[i+3])
+            print("Polyline2D : ponto = {0}, {1}".format(p0x, p0y))
+
+            dx = abs(p1x - p0x)
+            dy = abs(p1y - p0y)
+
+            if dx > dy:
+                if p0x > p1x:
+                    p0x, p0y, p1x, p1y = p1x, p1y, p0x, p0y
+                for x in range(p0x, p1x):
+                    y = p0y + (x - p0x)*(p1y - p0y)/(p1x - p0x)
+                    gpu.GPU.draw_pixel([x, round(y)], gpu.GPU.RGB8, emissiva)
+            else:
+                if p0y > p1y:
+                    p0x, p0y, p1x, p1y = p1x, p1y, p0x, p0y
+                for y in range(p0y, p1y):
+                    x = p0x + (y - p0y)*(p1x - p0x)/(p1y - p0y)
+                    gpu.GPU.draw_pixel([round(x), y], gpu.GPU.RGB8, emissiva)
+
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
 
     @staticmethod
