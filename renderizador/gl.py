@@ -159,11 +159,10 @@ class GL:
             else:
                 return False
         
-        for i in range(0, len(vertices), 3):
-            for x in range(0, GL.width):
-                for y in range(0, GL.height):
-                    if inside(L1, L2, L3, (x,y)):
-                        gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
+        for x in range(0, GL.width):
+            for y in range(0, GL.height):
+                if inside(L1, L2, L3, (x,y)):
+                    gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
         
 
 
