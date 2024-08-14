@@ -90,13 +90,15 @@ class GL:
                     p0x, p0y, p1x, p1y = p1x, p1y, p0x, p0y
                 for x in range(p0x, p1x):
                     y = p0y + (x - p0x)*(p1y - p0y)/(p1x - p0x)
-                    gpu.GPU.draw_pixel([x, round(y)], gpu.GPU.RGB8, emissiva)
+                    if x>=0 and x<GL.width and y>=0 and y<GL.height:
+                        gpu.GPU.draw_pixel([x, int(y)], gpu.GPU.RGB8, emissiva)
             else:
                 if p0y > p1y:
                     p0x, p0y, p1x, p1y = p1x, p1y, p0x, p0y
                 for y in range(p0y, p1y):
                     x = p0x + (y - p0y)*(p1x - p0x)/(p1y - p0y)
-                    gpu.GPU.draw_pixel([round(x), y], gpu.GPU.RGB8, emissiva)
+                    if x>=0 and x<GL.width and y>=0 and y<GL.height:
+                        gpu.GPU.draw_pixel([int(x), y], gpu.GPU.RGB8, emissiva)
 
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
 
