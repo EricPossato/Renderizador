@@ -74,12 +74,12 @@ class GL:
 
         emissiva = colors['emissiveColor']
         emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
-
-        for i in range(0, len(lineSegments), 4):
-            p0x = int(lineSegments[i])
-            p0y = int(lineSegments[i+1])
-            p1x = int(lineSegments[i+2])
-            p1y = int(lineSegments[i+3])
+        n_lines = len(lineSegments) //2 - 1
+        for i in range(0, n_lines):
+            p0x = int(lineSegments[2*i])
+            p0y = int(lineSegments[2*i+1])
+            p1x = int(lineSegments[2*i+2])
+            p1y = int(lineSegments[2*i+3])
             print("Polyline2D : ponto = {0}, {1}".format(p0x, p0y))
 
             dx = abs(p1x - p0x)
