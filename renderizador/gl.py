@@ -24,6 +24,44 @@ class GL:
     near = 0.01   # plano de corte próximo
     far = 1000    # plano de corte distante
 
+    def trans_matrix(x,y,z):
+        return np.array([[1,0,0,x],
+                        [0,1,0,y],
+                        [0,0,1,z],
+                        [0,0,0,1]])
+    
+    def rot_matrix(u,theta):
+        cos = np.cos(theta/2)
+        sin = np.sin(theta/2)
+
+        # vector = np.array([0,0,1])
+        # mag = np.sqrt(vector[0]**2 + vector[1]**2 + vector[2]**2)
+        # u = vector/mag
+
+
+        qi = u[0] * sin
+        qj = u[1] * sin
+        qk = u[2] * sin
+        qr = cos
+
+
+        R = np.array([[1-2*(qj**2 - qk**2), 2*(qi*qj - qk*qr), 2*(qi*qk + qj*qr), 0],
+                    [2*(qi*qj + qk*qr), 1 - 2*(qi**2 + qk**2), 2*(qi*qk - qi*qr), 0],
+                    [2*(qi*qk - qj*qr), 2*(qj*qk + qi*qr), 1-2*(qi**2+qj**2), 0],
+                    [0,0,0,1]])
+        return R
+
+    def scale_matrix(x,y,z):
+        return np.array([[x,0,0,0],
+                        [0,y,0,0],
+                        [0,0,z,0],
+                        [0,0,0,1]])
+    
+    def to_screen_matrix(width, height):
+        return np.array([[width/2, 0, 0, width/2],
+                        [0, -height/2, 0, height/2],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
     @staticmethod
     def setup(width, height, near=0.01, far=1000):
         """Definr parametros para câmera de razão de aspecto, plano próximo e distante."""
@@ -31,6 +69,10 @@ class GL:
         GL.height = height
         GL.near = near
         GL.far = far
+        
+        GL.cam_pos = [0, 0, 0]
+        GL.cam_rot = [0, 0, 0]
+
 
     @staticmethod
     def polypoint2D(point, colors):
@@ -43,9 +85,6 @@ class GL:
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o Polypoint2D
         # você pode assumir inicialmente o desenho dos pontos com a cor emissiva (emissiveColor).
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
-        print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
         emissiva = colors['emissiveColor']
         emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
 
@@ -130,8 +169,6 @@ class GL:
         # quantidade de pontos é sempre multiplo de 3, ou seja, 6 valores ou 12 valores, etc.
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o TriangleSet2D
         # você pode assumir inicialmente o desenho das linhas com a cor emissiva (emissiveColor).
-        print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
-        print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
         emissiva = colors['emissiveColor']
         emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
@@ -184,12 +221,40 @@ class GL:
         # (emissiveColor), conforme implementar novos materias você deverá suportar outros
         # tipos de cores.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("TriangleSet : pontos = {0}".format(point)) # imprime no terminal pontos
-        print("TriangleSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        emissiva = colors['emissiveColor']
+        emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
+        
+        n_triangles = len(point) // 9
+        for i in range(0, n_triangles):
+            p = point[i*9:i*9+9]
+            tri_mat = np.array([[p[0], p[3], p[6]], [p[1], p[4], p[7]], [p[2], p[5], p[8]], [1,1,1]])
+
+            translation_matrix = GL.trans_matrix(GL.translation[0], GL.translation[1], GL.translation[2])
+            rotation_matrix = GL.rot_matrix(GL.rotation[:3], GL.rotation[3])
+            scale_matrix = GL.scale_matrix(GL.scale[0], GL.scale[1], GL.scale[2])
+
+            tranform_matrix = translation_matrix @ rotation_matrix @ scale_matrix
+            tri_mat = tranform_matrix @ tri_mat
+
+
+            cam_rot = np.transpose(GL.rot_matrix(GL.cam_rot[:3], GL.cam_rot[3]))
+            cam_trans = GL.trans_matrix(-GL.cam_pos[0], -GL.cam_pos[1], -GL.cam_pos[2])
+
+            view_matrix = cam_rot @ cam_trans
+
+            cam_transform_matrix = GL.perspective_matrix @ view_matrix
+
+            tri_mat = cam_transform_matrix @ tri_mat
+
+            tri_mat = tri_mat / tri_mat[3][0]
+
+            screen_matrix = GL.to_screen_matrix(GL.width, GL.height)
+            tri_mat = screen_matrix @ tri_mat
+
+            GL.triangleSet2D([tri_mat[0][0], tri_mat[1][0], tri_mat[0][1], tri_mat[1][1], tri_mat[0][2], tri_mat[1][2]], colors)
+
+
 
     @staticmethod
     def viewpoint(position, orientation, fieldOfView):
@@ -197,12 +262,18 @@ class GL:
         # Na função de viewpoint você receberá a posição, orientação e campo de visão da
         # câmera virtual. Use esses dados para poder calcular e criar a matriz de projeção
         # perspectiva para poder aplicar nos pontos dos objetos geométricos.
+        fovy =  2 * np.arctan(np.tan(fieldOfView/2) * GL.height / np.sqrt(GL.height**2 + GL.width**2))
+        aspect_ratio = GL.width / GL.height
+        near = GL.near
+        far = GL.far
+        top = near * np.tan(fovy)
+        right = top * aspect_ratio
+        
+        perspective_matrix = np.array([[near/right, 0, 0, 0],[0, near/top, 0, 0],[0, 0, -(far+near)/(far-near), -2*far*near/(far-near)],[0, 0, -1, 0]])
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Viewpoint : ", end='')
-        print("position = {0} ".format(position), end='')
-        print("orientation = {0} ".format(orientation), end='')
-        print("fieldOfView = {0} ".format(fieldOfView))
+        GL.perspective_matrix = perspective_matrix
+        GL.cam_pos = [position[0], position[1], position[2],1]
+        GL.cam_rot = orientation
 
     @staticmethod
     def transform_in(translation, scale, rotation):
@@ -215,14 +286,21 @@ class GL:
         # Quando se entrar em um nó transform se deverá salvar a matriz de transformação dos
         # modelos do mundo em alguma estrutura de pilha.
 
+        GL.translation = [0, 0, 0]
+        GL.scale = [1, 1, 1]
+        GL.rotation = [0, 0, 0, 0]
+        
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Transform : ", end='')
+        #print("Transform : ", end='')
         if translation:
-            print("translation = {0} ".format(translation), end='') # imprime no terminal
+            GL.translation = translation
+            #print("translation = {0} ".format(translation), end='') # imprime no terminal
         if scale:
-            print("scale = {0} ".format(scale), end='') # imprime no terminal
+            GL.scale = scale
+            #print("scale = {0} ".format(scale), end='') # imprime no terminal
         if rotation:
-            print("rotation = {0} ".format(rotation), end='') # imprime no terminal
+            GL.rotation = rotation
+            #print("rotation = {0} ".format(rotation), end='') # imprime no terminal
         print("")
 
     @staticmethod
@@ -233,8 +311,6 @@ class GL:
         # deverá recuperar a matriz de transformação dos modelos do mundo da estrutura de
         # pilha implementada.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Saindo de Transform")
 
     @staticmethod
     def triangleStripSet(point, stripCount, colors):
