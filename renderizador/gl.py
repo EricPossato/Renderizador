@@ -173,38 +173,38 @@ class GL:
         emissiva = colors['emissiveColor']
         emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
 
-        def L(p0x, p0y, p1x, p1y):
+        def L(p0, p1, ponto):
 
-            x = p1y - p0y
-            y = - (p1x - p0x)
-            n = p0y * (p1x - p0x) - p0x*(p1y - p0y)
+            vd = (p1[0]-p0[0],p1[1]-p0[1])
+            vn = (vd[1],-vd[0])
+            vp = (ponto[0]-p0[0],ponto[1]-p0[1])
 
-            return(x,y,n)
-        
-        for i in range(0, len(vertices), 6):
-            L1 = L(vertices[i], vertices[i+1], vertices[i+2], vertices[i+3])
-            L2 = L(vertices[i+2], vertices[i+3], vertices[i+4], vertices[i+5])
-            L3 = L(vertices[i+4], vertices[i+5], vertices[i], vertices[i+1])
+            return(vp[0]*vn[0]+vp[1]*vn[1]) >= 0
 
-        def calcL(L,ponto):
-            return L[0]*ponto[0] + L[1]*ponto[1] + L[2]
-
-        def inside(L1, L2, L3, ponto):
-            v1 = calcL(L1,ponto)
-            v2 = calcL(L2, ponto)
-            v3 = calcL(L3, ponto)
-            if (v1 >= 0) and (v2 >=0) and (v3 >= 0):
-                return True
-            else:
-                return False
-        
-        for x in range(0, GL.width):
-            for y in range(0, GL.height):
-                if inside(L1, L2, L3, (x,y)):
-                    gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
-        
+        def inside(ponto_t0, ponto_t1,ponto_t2, ponto):
+           return L(ponto_t0,ponto_t1,ponto) and L(ponto_t1,ponto_t2,ponto) and L(ponto_t2,ponto_t0,ponto)
+           
+        for i in range(0, int(len(vertices)/6)):
+            x0 = vertices[i*6]
+            y0 = vertices[i*6+1]
+            x1 = vertices[i*6+2]
+            y1 = vertices[i*6+3]
+            x2 = vertices[i*6+4]
+            y2 = vertices[i*6+5]
 
 
+            min_x = math.floor(min(x0,x1,x2))
+            max_x = math.ceil(max(x0,x1,x2))
+            min_y = math.floor(min(y0,y1,y2))
+            max_y = math.ceil(max(y0,y1,y2))
+
+
+            
+            for x in range(min_x, max_x+1):
+                for y in range(min_y, max_y+1):
+                    if inside([x0,y0], [x1,y1], [x2,y2], [x+0.5,y+0.5]) and x>=0 and y>=0 and x<GL.width and y<GL.height:
+                        gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
+                        
     @staticmethod
     def triangleSet(point, colors):
         """Função usada para renderizar TriangleSet."""
