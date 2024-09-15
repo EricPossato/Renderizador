@@ -72,6 +72,22 @@ class GL:
         
         GL.cam_pos = [0, 0, 0]
         GL.cam_rot = [0, 0, 0]
+        GL.stack = [np.identity(4)]
+
+    @staticmethod
+    def pushMatrix(matrix):
+        """Empilhar a matriz atual."""
+        GL.stack.append(GL.getMatrix()@matrix)
+
+    @staticmethod
+    def popMatrix():
+        """Desempilhar a matriz atual."""
+        GL.stack.pop()
+
+    @staticmethod
+    def getMatrix():
+        """Obter a matriz atual."""
+        return GL.stack[-1]
 
 
     @staticmethod
@@ -230,11 +246,7 @@ class GL:
             p = point[i*9:i*9+9]
             tri_mat = np.array([[p[0], p[3], p[6]], [p[1], p[4], p[7]], [p[2], p[5], p[8]], [1,1,1]])
 
-            translation_matrix = GL.trans_matrix(GL.translation[0], GL.translation[1], GL.translation[2])
-            rotation_matrix = GL.rot_matrix(GL.rotation[:3], GL.rotation[3])
-            scale_matrix = GL.scale_matrix(GL.scale[0], GL.scale[1], GL.scale[2])
-
-            tranform_matrix = translation_matrix @ rotation_matrix @ scale_matrix
+            tranform_matrix = GL.getMatrix()
             tri_mat = tranform_matrix @ tri_mat
 
 
@@ -303,7 +315,12 @@ class GL:
         if rotation:
             GL.rotation = rotation
             #print("rotation = {0} ".format(rotation), end='') # imprime no terminal
-        print("")
+        translation_matrix = GL.trans_matrix(GL.translation[0], GL.translation[1], GL.translation[2])
+        rotation_matrix = GL.rot_matrix(GL.rotation[:3], GL.rotation[3])
+        scale_matrix = GL.scale_matrix(GL.scale[0], GL.scale[1], GL.scale[2])
+        
+        tranform_matrix = translation_matrix @ rotation_matrix @ scale_matrix
+        GL.pushMatrix(tranform_matrix)
 
     @staticmethod
     def transform_out():
@@ -312,6 +329,7 @@ class GL:
         # grafo de cena. Não são passados valores, porém quando se sai de um nó transform se
         # deverá recuperar a matriz de transformação dos modelos do mundo da estrutura de
         # pilha implementada.
+        GL.popMatrix()
 
 
     @staticmethod
