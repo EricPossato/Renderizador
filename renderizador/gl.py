@@ -45,10 +45,10 @@ class GL:
         qr = cos
 
 
-        R = np.array([[1-2*(qj**2 - qk**2), 2*(qi*qj - qk*qr), 2*(qi*qk + qj*qr), 0],
-                    [2*(qi*qj + qk*qr), 1 - 2*(qi**2 + qk**2), 2*(qi*qk - qi*qr), 0],
-                    [2*(qi*qk - qj*qr), 2*(qj*qk + qi*qr), 1-2*(qi**2+qj**2), 0],
-                    [0,0,0,1]])
+        R = [[1-2*(qj**2+qk**2),2*(qi*qj - qk*qr)   , 2*(qi*qk + qj*qr)     ,0],
+          [2*(qi*qj + qk*qr),1-2*(qi**2 + qk**2) , 2*(qj*qk - qi*qr)     ,0],
+          [2*(qi*qk - qj*qr),2*(qj*qk+qi*qr)     ,1-2*(qi**2 + qj**2)    ,0],
+          [0                ,0                   ,0                      ,1]]
         return R
 
     def scale_matrix(x,y,z):
@@ -209,6 +209,12 @@ class GL:
             y2 = vertices[i*6+5]
 
 
+            area = 0.5*(x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1))
+            if area>0: # clockwise
+                x0,y0,x1,y1,x2,y2 = x1,y1,x0,y0,x2,y2 # swap points
+                area = -area # invert area
+
+
             min_x = math.floor(min(x0,x1,x2))
             max_x = math.ceil(max(x0,x1,x2))
             min_y = math.floor(min(y0,y1,y2))
@@ -236,35 +242,21 @@ class GL:
         # inicialmente, para o TriangleSet, o desenho das linhas com a cor emissiva
         # (emissiveColor), conforme implementar novos materias você deverá suportar outros
         # tipos de cores.
-
-
-        emissiva = colors['emissiveColor']
-        emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
         
         n_triangles = len(point) // 9
         for i in range(0, n_triangles):
             p = point[i*9:i*9+9]
-            tri_mat = np.array([[p[0], p[3], p[6]], [p[1], p[4], p[7]], [p[2], p[5], p[8]], [1,1,1]])
+            x = p[0:9:3]
+            y = p[1:9:3]
+            z = p[2:9:3]
+            tri_mat = np.array([x, y, z, [1, 1, 1]])
+            tri_mat = GL.getMatrix() @ tri_mat
 
-            tranform_matrix = GL.getMatrix()
-            tri_mat = tranform_matrix @ tri_mat
-
-
-            cam_rot = np.transpose(GL.rot_matrix(GL.cam_rot[:3], GL.cam_rot[3]))
-            cam_trans = GL.trans_matrix(-GL.cam_pos[0], -GL.cam_pos[1], -GL.cam_pos[2])
-
-            view_matrix = cam_rot @ cam_trans
-
-            cam_transform_matrix = GL.perspective_matrix @ view_matrix
-
-            tri_mat = cam_transform_matrix @ tri_mat
-
+            tri_mat = GL.perspective_matrix @ tri_mat
             tri_mat = tri_mat / tri_mat[3][0]
-
-            screen_matrix = GL.to_screen_matrix(GL.width, GL.height)
-            tri_mat = screen_matrix @ tri_mat
-
-            GL.triangleSet2D([tri_mat[0][0], tri_mat[1][0], tri_mat[0][1], tri_mat[1][1], tri_mat[0][2], tri_mat[1][2]], colors)
+            screen_matrix = GL.to_screen_matrix(GL.width, GL.height) @ tri_mat
+            
+            GL.triangleSet2D([screen_matrix[0][0], screen_matrix[1][0], screen_matrix[0][1], screen_matrix[1][1], screen_matrix[0][2], screen_matrix[1][2]], colors)
 
 
 
@@ -280,12 +272,17 @@ class GL:
         far = GL.far
         top = near * np.tan(fovy)
         right = top * aspect_ratio
-        
-        perspective_matrix = np.array([[near/right, 0, 0, 0],[0, near/top, 0, 0],[0, 0, -(far+near)/(far-near), -2*far*near/(far-near)],[0, 0, -1, 0]])
 
-        GL.perspective_matrix = perspective_matrix
-        GL.cam_pos = [position[0], position[1], position[2],1]
-        GL.cam_rot = orientation
+        cam_trans = np.linalg.inv(GL.trans_matrix(position[0], position[1], position[2]))
+        cam_rot  = np.linalg.inv(GL.rot_matrix(orientation[:3], orientation[3]))
+        look_at = cam_rot @ cam_trans
+                
+        perspective_matrix = np.array([[near/right, 0, 0, 0],
+                                       [0, near/top, 0, 0],
+                                       [0, 0, -(far+near)/(far-near), -(2*far*near)/(far-near)],
+                                       [0, 0, -1, 0]])
+
+        GL.perspective_matrix = perspective_matrix @ look_at
 
     @staticmethod
     def transform_in(translation, scale, rotation):
@@ -335,26 +332,24 @@ class GL:
     @staticmethod
     def triangleStripSet(point, stripCount, colors):
         """Função usada para renderizar TriangleStripSet."""
-        # A função triangleStripSet é usada para desenhar tiras de triângulos interconectados,
-        # você receberá as coordenadas dos pontos no parâmetro point, esses pontos são uma
-        # lista de pontos x, y, e z sempre na ordem. Assim point[0] é o valor da coordenada x
-        # do primeiro ponto, point[1] o valor y do primeiro ponto, point[2] o valor z da
-        # coordenada z do primeiro ponto. Já point[3] é a coordenada x do segundo ponto e assim
-        # por diante. No TriangleStripSet a quantidade de vértices a serem usados é informado
-        # em uma lista chamada stripCount (perceba que é uma lista). Ligue os vértices na ordem,
-        # primeiro triângulo será com os vértices 0, 1 e 2, depois serão os vértices 1, 2 e 3,
-        # depois 2, 3 e 4, e assim por diante. Cuidado com a orientação dos vértices, ou seja,
-        # todos no sentido horário ou todos no sentido anti-horário, conforme especificado.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("TriangleStripSet : pontos = {0} ".format(point), end='')
-        for i, strip in enumerate(stripCount):
-            print("strip[{0}] = {1} ".format(i, strip), end='')
-        print("")
-        print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
+        index = 0  # Índice para controlar os vértices
+        for strip in stripCount:
+            for i in range(strip - 2): 
+                # três pontos do triângulo
+                v1 = point[index:index + 3]
+                v2 = point[index + 3:index + 6]
+                v3 = point[index + 6:index + 9]
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+                # Renderiza o triângulo ligando os vértices (orientação horária ou anti-horária)
+                GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+
+                # Avança para o próximo conjunto de vértices
+                index += 3
+
+            # Atualiza o índice para a próxima tira de triângulos
+            index += 3
+
 
     @staticmethod
     def indexedTriangleStripSet(point, index, colors):
