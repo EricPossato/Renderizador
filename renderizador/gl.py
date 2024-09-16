@@ -333,22 +333,12 @@ class GL:
     def triangleStripSet(point, stripCount, colors):
         """Função usada para renderizar TriangleStripSet."""
 
-        index = 0  # Índice para controlar os vértices
-        for strip in stripCount:
-            for i in range(strip - 2): 
-                # três pontos do triângulo
-                v1 = point[index:index + 3]
-                v2 = point[index + 3:index + 6]
-                v3 = point[index + 6:index + 9]
+        for i in range(0, len(point)-6, 3):
+            v1 = point[i : i + 3]
+            v2 = point[i + 3 : i + 6]
+            v3 = point[i + 6 : i + 9]
+            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
 
-                # Renderiza o triângulo ligando os vértices (orientação horária ou anti-horária)
-                GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
-
-                # Avança para o próximo conjunto de vértices
-                index += 3
-
-            # Atualiza o índice para a próxima tira de triângulos
-            index += 3
 
 
     @staticmethod
