@@ -334,9 +334,9 @@ class GL:
         """Função usada para renderizar TriangleStripSet."""
 
         for i in range(0, len(point)-6, 3):
-            v1 = point[i : i + 3]
-            v2 = point[i + 3 : i + 6]
-            v3 = point[i + 6 : i + 9]
+            v1 = point[i:i+3]
+            v2 = point[i+3:i+6]
+            v3 = point[i+6:i+9]
             GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
 
 
@@ -347,8 +347,9 @@ class GL:
         
         i = 0 
         while i < len(index) - 2: 
-            if index[i + 2] == -1:
-                break  # Para a execução se encontrar -1 no índice
+            if index[i] == -1 or index[i + 1] == -1 or index[i + 2] == -1:
+                i += 1
+                continue  # Para a execução se encontrar -1 no índice
             
             # Pega as coordenadas dos vértices usando os índices da lista 'index'
             v1 = point[3 * index[i] : 3 * index[i] + 3]  # Coordenadas do primeiro vértice
@@ -359,7 +360,6 @@ class GL:
             
             # Avança para o próximo conjunto de vértices
             i += 1
-
 
     @staticmethod
     def box(size, colors):
