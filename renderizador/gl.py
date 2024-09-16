@@ -25,7 +25,7 @@ class GL:
     far = 1000    # plano de corte distante
 
     def trans_matrix(x,y,z):
-        return np.array([[1,0,0,x],
+        return np.matrix([[1,0,0,x],
                         [0,1,0,y],
                         [0,0,1,z],
                         [0,0,0,1]])
@@ -255,9 +255,9 @@ class GL:
             tri_mat = GL.perspective_matrix @ tri_mat
             tri_mat = tri_mat / tri_mat[3][0]
             screen_matrix = GL.to_screen_matrix(GL.width, GL.height) @ tri_mat
-            
-            GL.triangleSet2D([screen_matrix[0][0], screen_matrix[1][0], screen_matrix[0][1], screen_matrix[1][1], screen_matrix[0][2], screen_matrix[1][2]], colors)
 
+            screen_matrix = np.array(screen_matrix)
+            GL.triangleSet2D([screen_matrix[0][0], screen_matrix[1][0], screen_matrix[0][1], screen_matrix[1][1], screen_matrix[0][2], screen_matrix[1][2]], colors)
 
 
     @staticmethod
