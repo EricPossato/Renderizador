@@ -73,6 +73,7 @@ class GL:
         GL.cam_pos = [0, 0, 0]
         GL.cam_rot = [0, 0, 0]
         GL.stack = [np.identity(4)]
+        GL.supersampling = np.zeros((width*2, height*2, 3))
 
     @staticmethod
     def pushMatrix(matrix):
@@ -220,12 +221,24 @@ class GL:
             min_y = math.floor(min(y0,y1,y2))
             max_y = math.ceil(max(y0,y1,y2))
 
+            super_min_x = max(0, min_x*2)
+            super_max_x = min(GL.width*2-1, max_x*2)
+            super_min_y = max(0, min_y*2)
+            super_max_y = min(GL.height*2-1, max_y*2)
+            
 
             
+            for x in range(super_min_x, super_max_x):
+                for y in range(super_min_y, super_max_y):
+                    if inside([x0*2,y0*2], [x1*2,y1*2], [x2*2,y2*2], [x+0.5,y+0.5]):
+                        GL.supersampling[x][y] = emissiva
+                        #gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
+            
+
             for x in range(min_x, max_x+1):
                 for y in range(min_y, max_y+1):
-                    if inside([x0,y0], [x1,y1], [x2,y2], [x+0.5,y+0.5]) and x>=0 and y>=0 and x<GL.width and y<GL.height:
-                        gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
+                    color = np.mean(GL.supersampling[2*x:2*x+2, 2*y:2*y+2], axis=(0,1))
+                    gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, color.astype(int).tolist())
                         
     @staticmethod
     def triangleSet(point, colors):
