@@ -85,7 +85,7 @@ class GL:
         GL.cam_pos = [0, 0, 0]
         GL.cam_rot = [0, 0, 0]
         GL.stack = [np.identity(4)]
-        GL.supersampling = np.zeros((width*2, height*2, 3))
+        GL.supersampling = np.zeros((GL.width*2, GL.height*2, 3))
         GL.zBuffer = - np.inf * np.ones((GL.width*2, GL.height*2))
 
     @staticmethod
@@ -232,12 +232,12 @@ class GL:
             area = 0.5*(x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1))
             if area>0: # clockwise
                 x0,y0,x1,y1,x2,y2 = x1,y1,x0,y0,x2,y2 # swap points
-
-            min_x = math.floor(min(x0,x1,x2))
-            max_x = math.ceil(max(x0,x1,x2))
-            min_y = math.floor(min(y0,y1,y2))
-            max_y = math.ceil(max(y0,y1,y2))
-
+    
+            min_x = max(0, math.floor(min(x0, x1, x2)))
+            max_x = min(GL.width - 1, math.ceil(max(x0, x1, x2)))
+            min_y = max(0, math.floor(min(y0, y1, y2)))
+            max_y = min(GL.height - 1, math.ceil(max(y0, y1, y2)))
+            
             super_min_x = max(0, min_x*2)
             super_max_x = min(GL.width*2-1, max_x*2)
             super_min_y = max(0, min_y*2)
