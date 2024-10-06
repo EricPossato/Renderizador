@@ -180,9 +180,11 @@ class GL:
 
 
     @staticmethod
-    def triangleSet2D(vertices, colors):
+    def triangleSet2D(vertices, colors,
+                    colorPerVertex = False,vertexColors = None ,zs = None,
+                    texture_values = None,image = None,
+                    transparency = 0):
         """Função usada para renderizar TriangleSet2D."""
-        # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/geometry2D.html#TriangleSet2D
         # Nessa função você receberá os vertices de um triângulo no parâmetro vertices,
         # esses pontos são uma lista de pontos x, y sempre na ordem. Assim point[0] é o
         # valor da coordenada x do primeiro ponto, point[1] o valor y do primeiro ponto.
@@ -219,7 +221,6 @@ class GL:
                 x0,y0,x1,y1,x2,y2 = x1,y1,x0,y0,x2,y2 # swap points
                 area = -area # invert area
 
-
             min_x = math.floor(min(x0,x1,x2))
             max_x = math.ceil(max(x0,x1,x2))
             min_y = math.floor(min(y0,y1,y2))
@@ -232,10 +233,21 @@ class GL:
             
 
             
-            for x in range(super_min_x, super_max_x):
-                for y in range(super_min_y, super_max_y):
+            for x in range(super_min_x, super_max_x+1):
+                for y in range(super_min_y, super_max_y+1):
                     if inside([x0*2,y0*2], [x1*2,y1*2], [x2*2,y2*2], [x+0.5,y+0.5]):
-                        GL.supersampling[x][y] = emissiva
+                        if colorPerVertex:
+                            alpha, beta, gamma = GL.inter_area(x,y,x0*2,y0*2,x1*2,y1*2,x2*2,y2*2)
+                            r = alpha*vertexColors[3*i][0] + beta*vertexColors[3*i+1][0] + gamma*vertexColors[3*i+2][0]
+                            g = alpha*vertexColors[3*i][1] + beta*vertexColors[3*i+1][1] + gamma*vertexColors[3*i+2][1]
+                            b = alpha*vertexColors[3*i][2] + beta*vertexColors[3*i+1][2] + gamma*vertexColors[3*i+2][2]
+                            z = 1/(alpha/zs[0]) + beta/zs[1] + gamma/zs[2]
+                            cr = z * r/zs[0]
+                            cg = z * g/zs[1]
+                            cb = z * b/zs[2]
+                            GL.supersampling[x][y] = [int(cr), int(cg), int(cb)]
+                        else:
+                            GL.supersampling[x][y] = emissiva
                         #gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
             
 
@@ -245,9 +257,9 @@ class GL:
                     gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, color.astype(int).tolist())
                         
     @staticmethod
-    def triangleSet(point, colors):
+    def triangleSet(point, colors,colorPerVertex = False,vertexColors = None,
+                    texture_values = None,image = None):
         """Função usada para renderizar TriangleSet."""
-        # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/rendering.html#TriangleSet
         # Nessa função você receberá pontos no parâmetro point, esses pontos são uma lista
         # de pontos x, y, e z sempre na ordem. Assim point[0] é o valor da coordenada x do
         # primeiro ponto, point[1] o valor y do primeiro ponto, point[2] o valor z da
@@ -260,23 +272,38 @@ class GL:
         # inicialmente, para o TriangleSet, o desenho das linhas com a cor emissiva
         # (emissiveColor), conforme implementar novos materias você deverá suportar outros
         # tipos de cores.
-        
+        transparencia = colors["transparency"]
         n_triangles = len(point) // 9
+        tranform_matrix = GL.getMatrix()
+        to_screen_matrix = GL.to_screen_matrix(GL.width, GL.height)
         for i in range(0, n_triangles):
             p = point[i*9:i*9+9]
             x = p[0:9:3]
             y = p[1:9:3]
             z = p[2:9:3]
             tri_mat = np.array([x, y, z, [1, 1, 1]])
-            tri_mat = GL.getMatrix() @ tri_mat
-
+            
+            tri_mat = tranform_matrix @ tri_mat
+            zs = (GL.look_at @ tri_mat)[2][0]
             tri_mat = GL.perspective_matrix @ tri_mat
             tri_mat = tri_mat / tri_mat[3][0]
-            screen_matrix = GL.to_screen_matrix(GL.width, GL.height) @ tri_mat
+            screen_matrix = to_screen_matrix @ tri_mat
 
             screen_matrix = np.array(screen_matrix)
-            GL.triangleSet2D([screen_matrix[0][0], screen_matrix[1][0], screen_matrix[0][1], screen_matrix[1][1], screen_matrix[0][2], screen_matrix[1][2]], colors)
-
+            GL.triangleSet2D(
+                [
+                    screen_matrix[0][0], screen_matrix[1][0],
+                    screen_matrix[0][1], screen_matrix[1][1],
+                    screen_matrix[0][2], screen_matrix[1][2]
+                ], 
+                colors,
+                colorPerVertex,
+                vertexColors[3*i:3*i+3] if colorPerVertex else None,
+                np.array(zs)[0],
+                texture_values[6*i:6*i+6] if texture_values is not None else None,
+                image = image,
+                transparency = transparencia
+                )
 
     @staticmethod
     def viewpoint(position, orientation, fieldOfView):
@@ -294,6 +321,7 @@ class GL:
         cam_trans = np.linalg.inv(GL.trans_matrix(position[0], position[1], position[2]))
         cam_rot  = np.linalg.inv(GL.rot_matrix(orientation[:3], orientation[3]))
         look_at = cam_rot @ cam_trans
+        GL.look_at = look_at
                 
         perspective_matrix = np.array([[near/right, 0, 0, 0],
                                        [0, near/top, 0, 0],
@@ -369,7 +397,9 @@ class GL:
             GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
 
     @staticmethod
-    def indexedTriangleStripSet(point, index, colors):
+    def indexedTriangleStripSet(point, index, colors,
+                                colorPerVertex=False, vertexColors=None, colorIndex=None,
+                                texCoord=None, texCoordIndex=None, image=None):
         """Função usada para renderizar IndexedTriangleStripSet."""
         # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/rendering.html#IndexedTriangleStripSet
         # A função indexedTriangleStripSet é usada para desenhar tiras de triângulos
@@ -383,7 +413,9 @@ class GL:
         # primeiro triângulo será com os vértices 0, 1 e 2, depois serão os vértices 1, 2 e 3,
         # depois 2, 3 e 4, e assim por diante. Cuidado com a orientação dos vértices, ou seja,
         # todos no sentido horário ou todos no sentido anti-horário, conforme especificado.
-
+        verts = []
+        color_list = []
+        texture_list = []
         i = 0 
         while i < len(index) - 2: 
             if index[i] == -1 or index[i + 1] == -1 or index[i + 2] == -1:
@@ -394,8 +426,30 @@ class GL:
             v1 = point[3 * index[i] : 3 * index[i] + 3]  # Coordenadas do primeiro vértice
             v2 = point[3 * index[i + 1] : 3 * index[i + 1] + 3]  # Coordenadas do segundo vértice
             v3 = point[3 * index[i + 2] : 3 * index[i + 2] + 3]  # Coordenadas do terceiro vértice
+
+            verts.extend(v1)
+            verts.extend(v2)
+            verts.extend(v3)
+
+            if colorPerVertex and colorIndex is not None:
+                c1 = colorIndex[i] * 3
+                c2 = colorIndex[i + 1] * 3
+                c3 = colorIndex[i + 2] * 3
+                color_list.extend(vertexColors[c1 : c1 + 3])
+                color_list.extend(vertexColors[c2 : c2 + 3])
+                color_list.extend(vertexColors[c3 : c3 + 3])
+
+            elif texCoord is not None:
+                t1 = texCoordIndex[i] * 2
+                t2 = texCoordIndex[i + 1] * 2
+                t3 = texCoordIndex[i + 2] * 2
+                texture_list.extend(texCoord[t1 : t1 + 2])
+                texture_list.extend(texCoord[t2 : t2 + 2])
+                texture_list.extend(texCoord[t3 : t3 + 2])
             
-            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+            GL.triangleSet(verts, colors,
+                    colorPerVertex, vertexColors=color_list if colorPerVertex else None,
+                    texture_values = texture_list if image is not None else None,image = image)
             
             # Avança para o próximo conjunto de vértices
             i += 1
