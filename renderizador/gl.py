@@ -237,7 +237,7 @@ class GL:
             max_x = min(GL.width - 1, math.ceil(max(x0, x1, x2)))
             min_y = max(0, math.floor(min(y0, y1, y2)))
             max_y = min(GL.height - 1, math.ceil(max(y0, y1, y2)))
-            
+
             super_min_x = max(0, min_x*2)
             super_max_x = min(GL.width*2-1, max_x*2)
             super_min_y = max(0, min_y*2)
@@ -269,6 +269,13 @@ class GL:
                             color_used = [int(cr), int(cg), int(cb)]
                         else:
                             color_used = emissiva
+
+                        current_color = GL.supersampling[x][y]
+                        color_used = [
+                            int(color_used[0] * (1-transparency) + current_color[0] * transparency),
+                            int(color_used[1] * (1-transparency) + current_color[1] * transparency),
+                            int(color_used[2] * (1-transparency) + current_color[2] * transparency)
+                        ]
                         
                         GL.supersampling[x][y] = color_used
             
