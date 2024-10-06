@@ -362,15 +362,11 @@ class GL:
         # depois 2, 3 e 4, e assim por diante. Cuidado com a orientação dos vértices, ou seja,
         # todos no sentido horário ou todos no sentido anti-horário, conforme especificado.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("TriangleStripSet : pontos = {0} ".format(point), end='')
-        for i, strip in enumerate(stripCount):
-            print("strip[{0}] = {1} ".format(i, strip), end='')
-        print("")
-        print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
-
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        for i in range(0, len(point)-6, 3):
+            v1 = point[i:i+3]
+            v2 = point[i+3:i+6]
+            v3 = point[i+6:i+9]
+            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
 
     @staticmethod
     def indexedTriangleStripSet(point, index, colors):
@@ -388,55 +384,51 @@ class GL:
         # depois 2, 3 e 4, e assim por diante. Cuidado com a orientação dos vértices, ou seja,
         # todos no sentido horário ou todos no sentido anti-horário, conforme especificado.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
-        print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
-
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        i = 0 
+        while i < len(index) - 2: 
+            if index[i] == -1 or index[i + 1] == -1 or index[i + 2] == -1:
+                i += 1
+                continue  # Para a execução se encontrar -1 no índice
+            
+            # Pega as coordenadas dos vértices usando os índices da lista 'index'
+            v1 = point[3 * index[i] : 3 * index[i] + 3]  # Coordenadas do primeiro vértice
+            v2 = point[3 * index[i + 1] : 3 * index[i + 1] + 3]  # Coordenadas do segundo vértice
+            v3 = point[3 * index[i + 2] : 3 * index[i + 2] + 3]  # Coordenadas do terceiro vértice
+            
+            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+            
+            # Avança para o próximo conjunto de vértices
+            i += 1
 
     @staticmethod
     def indexedFaceSet(coord, coordIndex, colorPerVertex, color, colorIndex,
                     texCoord, texCoordIndex, colors, current_texture):
         """Função usada para renderizar IndexedFaceSet."""
-        # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/geometry3D.html#IndexedFaceSet
-        # A função indexedFaceSet é usada para desenhar malhas de triângulos. Ela funciona de
-        # forma muito simular a IndexedTriangleStripSet porém com mais recursos.
-        # Você receberá as coordenadas dos pontos no parâmetro cord, esses
-        # pontos são uma lista de pontos x, y, e z sempre na ordem. Assim coord[0] é o valor
-        # da coordenada x do primeiro ponto, coord[1] o valor y do primeiro ponto, coord[2]
-        # o valor z da coordenada z do primeiro ponto. Já coord[3] é a coordenada x do
-        # segundo ponto e assim por diante. No IndexedFaceSet uma lista de vértices é informada
-        # em coordIndex, o valor -1 indica que a lista acabou.
-        # A ordem de conexão não possui uma ordem oficial, mas em geral se o primeiro ponto com os dois
-        # seguintes e depois este mesmo primeiro ponto com o terçeiro e quarto ponto. Por exemplo: numa
-        # sequencia 0, 1, 2, 3, 4, -1 o primeiro triângulo será com os vértices 0, 1 e 2, depois serão
-        # os vértices 0, 2 e 3, e depois 0, 3 e 4, e assim por diante, até chegar no final da lista.
-        # Adicionalmente essa implementação do IndexedFace aceita cores por vértices, assim
-        # se a flag colorPerVertex estiver habilitada, os vértices também possuirão cores
-        # que servem para definir a cor interna dos poligonos, para isso faça um cálculo
-        # baricêntrico de que cor deverá ter aquela posição. Da mesma forma se pode definir uma
-        # textura para o poligono, para isso, use as coordenadas de textura e depois aplique a
-        # cor da textura conforme a posição do mapeamento. Dentro da classe GPU já está
-        # implementadado um método para a leitura de imagens.
 
-        # Os prints abaixo são só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("IndexedFaceSet : ")
-        if coord:
-            print("\tpontos(x, y, z) = {0}, coordIndex = {1}".format(coord, coordIndex))
-        print("colorPerVertex = {0}".format(colorPerVertex))
-        if colorPerVertex and color and colorIndex:
-            print("\tcores(r, g, b) = {0}, colorIndex = {1}".format(color, colorIndex))
-        if texCoord and texCoordIndex:
-            print("\tpontos(u, v) = {0}, texCoordIndex = {1}".format(texCoord, texCoordIndex))
-        if current_texture:
-            image = gpu.GPU.load_texture(current_texture[0])
-            print("\t Matriz com image = {0}".format(image))
-            print("\t Dimensões da image = {0}".format(image.shape))
-        print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
+        # Processamento das faces baseado em coordIndex
+        faces = []
+        vertices = []
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        # Loop para construir as faces a partir de coordIndex
+        for i in coordIndex:
+            if i == -1 and len(vertices)>0:
+                faces.append(vertices)
+                vertices = []  # Reseta a lista de vértices para a próxima face
+            else:
+                vertices.append(i)  # Adiciona vértices à face atual
+
+        # Criação de strips a partir das faces
+        strips = []
+        for f in faces:
+            if len(f) < 3:
+                continue  # Ignora faces com menos de 3 vértices (não podem formar triângulos)
+
+            # Gera strips para a face
+            for i in range(1, len(f) - 1):
+                strips.extend([f[0], f[i], f[i + 1], -1])  # Adiciona um strip com final -1
+
+        # Chama a função para desenhar os strips de triângulos
+        GL.indexedTriangleStripSet(coord, strips, colors)
 
     @staticmethod
     def box(size, colors):
