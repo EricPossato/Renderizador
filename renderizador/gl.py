@@ -226,7 +226,7 @@ class GL:
 
     @staticmethod
     def triangleSet2D(vertices, colors,
-                    colorPerVertex = False,vertexColors = None ,zs = None,
+                    colorPerVertex = False,vertexColors = None ,z_values = None,
                     texture_values = None,image = None,
                     transparency = 0):
         """Função usada para renderizar TriangleSet2D."""
@@ -265,8 +265,8 @@ class GL:
 
 
             area = 0.5*(x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1))
-            if area>0: # clockwise
-                x0,y0,x1,y1,x2,y2 = x1,y1,x0,y0,x2,y2 # swap points
+            if area>0:
+                x0,y0,x1,y1,x2,y2 = x1,y1,x0,y0,x2,y2
     
             min_x = max(0, math.floor(min(x0, x1, x2)))
             max_x = min(GL.width - 1, math.ceil(max(x0, x1, x2)))
@@ -286,8 +286,8 @@ class GL:
                         alpha, beta, gamma = GL.inter_area(x,y,x0*2,y0*2,x1*2,y1*2,x2*2,y2*2)
 
 
-                        if zs is not None:
-                            z = 1/(alpha/zs[0] + beta/zs[1] + gamma/zs[2])
+                        if z_values is not None:
+                            z = 1/(alpha/z_values[0] + beta/z_values[1] + gamma/z_values[2])
 
                             if z > GL.zBuffer[x, y]:
                                 GL.zBuffer[x, y] = z
@@ -298,9 +298,9 @@ class GL:
                             r = alpha*vertexColors[3*i][0] + beta*vertexColors[3*i+1][0] + gamma*vertexColors[3*i+2][0]
                             g = alpha*vertexColors[3*i][1] + beta*vertexColors[3*i+1][1] + gamma*vertexColors[3*i+2][1]
                             b = alpha*vertexColors[3*i][2] + beta*vertexColors[3*i+1][2] + gamma*vertexColors[3*i+2][2]
-                            cr = z * r/zs[0]
-                            cg = z * g/zs[1]
-                            cb = z * b/zs[2]
+                            cr = z * r/z_values[0]
+                            cg = z * g/z_values[1]
+                            cb = z * b/z_values[2]
                             color_used = [int(cr), int(cg), int(cb)]
 
                         elif texture_values is not None:
@@ -332,15 +332,15 @@ class GL:
                             mipmap_used = mipmaps[d]
                             mipmap_shape = mipmap_used.shape[0]
                             
-                            uz0 = u0/zs[0]
-                            vz0 = v0/zs[0]
-                            uz1 = u1/zs[1]
-                            vz1 = v1/zs[1]
-                            uz2 = u2/zs[2]
-                            vz2 = v2/zs[2]
+                            uz0 = u0/z_values[0]
+                            vz0 = v0/z_values[0]
+                            uz1 = u1/z_values[1]
+                            vz1 = v1/z_values[1]
+                            uz2 = u2/z_values[2]
+                            vz2 = v2/z_values[2]
 
-                            u_interpolated = (alpha * uz0 + beta * uz1 + gamma * uz2) / (alpha /zs[0] + beta /zs[1] + gamma /zs[2])
-                            v_interpolated = (alpha * vz0 + beta * vz1 + gamma * vz2) / (alpha /zs[0] + beta /zs[1] + gamma /zs[2])
+                            u_interpolated = (alpha * uz0 + beta * uz1 + gamma * uz2) / (alpha /z_values[0] + beta /z_values[1] + gamma /z_values[2])
+                            v_interpolated = (alpha * vz0 + beta * vz1 + gamma * vz2) / (alpha /z_values[0] + beta /z_values[1] + gamma /z_values[2])
 
                             flipped_image = np.flip(mipmap_used[:, :, :3],axis=1)
                             r, g, b = flipped_image[min(255, int(u_interpolated * mipmap_shape)), min(255, int(v_interpolated * mipmap_shape))]
@@ -397,7 +397,7 @@ class GL:
             tri_mat = np.array([x, y, z, [1, 1, 1]])
             
             tri_mat = tranform_matrix @ tri_mat
-            zs = (GL.look_at @ tri_mat)[2][0]
+            z_values = (GL.look_at @ tri_mat)[2][0]
             tri_mat = GL.perspective_matrix @ tri_mat
             tri_mat = tri_mat / tri_mat[3][0]
             screen_matrix = to_screen_matrix @ tri_mat
@@ -412,7 +412,7 @@ class GL:
                 colors,
                 colorPerVertex,
                 vertexColors[3*i:3*i+3] if colorPerVertex else None,
-                np.array(zs)[0],
+                np.array(z_values)[0],
                 texture_values[6*i:6*i+6] if texture_values is not None else None,
                 image = image,
                 transparency = transparencia
@@ -536,9 +536,9 @@ class GL:
                 continue  # Para a execução se encontrar -1 no índice
             
             # Pega as coordenadas dos vértices usando os índices da lista 'index'
-            v1 = point[3 * index[i] : 3 * index[i] + 3]  # Coordenadas do primeiro vértice
-            v2 = point[3 * index[i + 1] : 3 * index[i + 1] + 3]  # Coordenadas do segundo vértice
-            v3 = point[3 * index[i + 2] : 3 * index[i + 2] + 3]  # Coordenadas do terceiro vértice
+            v1 = point[3 * index[i] : 3 * index[i] + 3]
+            v2 = point[3 * index[i + 1] : 3 * index[i + 1] + 3]
+            v3 = point[3 * index[i + 2] : 3 * index[i + 2] + 3]
 
             verts.extend(v1)
             verts.extend(v2)
@@ -548,17 +548,23 @@ class GL:
                 c1 = colorIndex[i] * 3
                 c2 = colorIndex[i + 1] * 3
                 c3 = colorIndex[i + 2] * 3
-                color_list.extend(vertexColors[c1 : c1 + 3])
-                color_list.extend(vertexColors[c2 : c2 + 3])
-                color_list.extend(vertexColors[c3 : c3 + 3])
+                color1 = vertexColors[c1 : c1 + 3]
+                color2 = vertexColors[c2 : c2 + 3]
+                color3 = vertexColors[c3 : c3 + 3]
+                color_list.extend(color1)
+                color_list.extend(color2)
+                color_list.extend(color3)
 
             elif texCoord is not None:
                 t1 = texCoordIndex[i] * 2
                 t2 = texCoordIndex[i + 1] * 2
                 t3 = texCoordIndex[i + 2] * 2
-                texture_list.extend(texCoord[t1 : t1 + 2])
-                texture_list.extend(texCoord[t2 : t2 + 2])
-                texture_list.extend(texCoord[t3 : t3 + 2])
+                tex1 = texCoord[t1 : t1 + 2]
+                tex2 = texCoord[t2 : t2 + 2]
+                tex3 = texCoord[t3 : t3 + 2]
+                texture_list.extend(tex1)
+                texture_list.extend(tex2)
+                texture_list.extend(tex3)
             
             GL.triangleSet(verts, colors,
                     colorPerVertex, vertexColors=color_list if colorPerVertex else None,
@@ -580,8 +586,7 @@ class GL:
         current_texture,
     ):
         """Função usada para renderizar IndexedFaceSet."""
-
-        # Handle texture cases first
+        
         if current_texture:
             image = gpu.GPU.load_texture(current_texture[0])
     
@@ -598,12 +603,9 @@ class GL:
                     
                     vert_colors.append([int(c * 255) for c in rgb])
                     
-        
-        
         faces = []
         vertices = []
-        
-        
+    
         for i in coordIndex:
             if i == -1:
                 if vertices:
@@ -611,15 +613,12 @@ class GL:
                 vertices = []
             else:
                 vertices.append(i)
-
-       
+        
         strips = []
 
-        
         for face in faces:
             if len(face) < 3:
                 continue
-            
             
             for i in range(1, len(face) - 1):
                 strips.append([face[0], face[i], face[i + 1], -1])
@@ -629,11 +628,9 @@ class GL:
             for item in sublist:
                 strips_flat.append(item)
 
-        # Call the triangle strip rendering function
         GL.indexedTriangleStripSet(coord, strips_flat,colors,
                                 colorPerVertex and color and colorIndex, vert_colors if vert_colors else colors,colorIndex,
                                 texCoord, texCoordIndex, image if current_texture else None) 
-
     @staticmethod
     def box(size, colors):
         """Função usada para renderizar Boxes."""
