@@ -23,6 +23,7 @@ class GL:
     height = 600  # altura da tela
     near = 0.01   # plano de corte próximo
     far = 1000    # plano de corte distante
+    zBuffer = None
 
     def trans_matrix(x,y,z):
         return np.matrix([[1,0,0,x],
@@ -62,6 +63,17 @@ class GL:
                         [0, -height/2, 0, height/2],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
+    def inter_area(x,y,x0,y0,x1,y1,x2,y2):
+        A = 1/2 * abs((x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1)))
+        A0 = 1/2 * abs((x*(y1-y2)+x1*(y2-y)+x2*(y-y1)))
+        A1 = 1/2 * abs((x0*(y-y2)+x*(y2-y0)+x2*(y0-y)))
+        A2 = 1/2 * abs((x0*(y1-y)+x1*(y-y0)+x*(y0-y1)))
+        alpha = A0/A
+        beta = A1/A
+        gamma = A2/A
+
+        return alpha, beta, gamma
+
     @staticmethod
     def setup(width, height, near=0.01, far=1000):
         """Definr parametros para câmera de razão de aspecto, plano próximo e distante."""
@@ -74,6 +86,7 @@ class GL:
         GL.cam_rot = [0, 0, 0]
         GL.stack = [np.identity(4)]
         GL.supersampling = np.zeros((width*2, height*2, 3))
+        GL.zBuffer = - np.inf * np.ones((GL.width*2, GL.height*2))
 
     @staticmethod
     def pushMatrix(matrix):
@@ -219,7 +232,6 @@ class GL:
             area = 0.5*(x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1))
             if area>0: # clockwise
                 x0,y0,x1,y1,x2,y2 = x1,y1,x0,y0,x2,y2 # swap points
-                area = -area # invert area
 
             min_x = math.floor(min(x0,x1,x2))
             max_x = math.ceil(max(x0,x1,x2))
@@ -236,25 +248,40 @@ class GL:
             for x in range(super_min_x, super_max_x+1):
                 for y in range(super_min_y, super_max_y+1):
                     if inside([x0*2,y0*2], [x1*2,y1*2], [x2*2,y2*2], [x+0.5,y+0.5]):
+                        alpha, beta, gamma = GL.inter_area(x,y,x0*2,y0*2,x1*2,y1*2,x2*2,y2*2)
+
+
+                        if zs is not None:
+                            z = 1/(alpha/zs[0] + beta/zs[1] + gamma/zs[2])
+
+                            if z > GL.zBuffer[x, y]:
+                                GL.zBuffer[x, y] = z
+                            else:
+                                continue
+
                         if colorPerVertex:
-                            alpha, beta, gamma = GL.inter_area(x,y,x0*2,y0*2,x1*2,y1*2,x2*2,y2*2)
                             r = alpha*vertexColors[3*i][0] + beta*vertexColors[3*i+1][0] + gamma*vertexColors[3*i+2][0]
                             g = alpha*vertexColors[3*i][1] + beta*vertexColors[3*i+1][1] + gamma*vertexColors[3*i+2][1]
                             b = alpha*vertexColors[3*i][2] + beta*vertexColors[3*i+1][2] + gamma*vertexColors[3*i+2][2]
-                            z = 1/(alpha/zs[0]) + beta/zs[1] + gamma/zs[2]
                             cr = z * r/zs[0]
                             cg = z * g/zs[1]
                             cb = z * b/zs[2]
-                            GL.supersampling[x][y] = [int(cr), int(cg), int(cb)]
+                            color_used = [int(cr), int(cg), int(cb)]
                         else:
-                            GL.supersampling[x][y] = emissiva
-                        #gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, emissiva)
+                            color_used = emissiva
+                        
+                        GL.supersampling[x][y] = color_used
             
 
-            for x in range(min_x, max_x+1):
-                for y in range(min_y, max_y+1):
-                    color = np.mean(GL.supersampling[2*x:2*x+2, 2*y:2*y+2], axis=(0,1))
-                    gpu.GPU.draw_pixel((x, y), gpu.GPU.RGB8, color.astype(int).tolist())
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                        p0 = GL.supersampling[x*2 - 1, y*2]
+                        p1 = GL.supersampling[x*2, y*2]
+                        p2 = GL.supersampling[x*2 - 1, y*2 + 1]
+                        p3 = GL.supersampling[x*2, y*2 + 1]
+                        mean = (p0 + p1 + p2 + p3) / 4
+                        
+                        gpu.GPU.draw_pixel([x, y], gpu.GPU.RGB8, mean)
                         
     @staticmethod
     def triangleSet(point, colors,colorPerVertex = False,vertexColors = None,
@@ -455,34 +482,75 @@ class GL:
             i += 1
 
     @staticmethod
-    def indexedFaceSet(coord, coordIndex, colorPerVertex, color, colorIndex,
-                    texCoord, texCoordIndex, colors, current_texture):
+    def indexedFaceSet(
+        coord,
+        coordIndex,
+        colorPerVertex,
+        color,
+        colorIndex,
+        texCoord,
+        texCoordIndex,
+        colors,
+        current_texture,
+    ):
         """Função usada para renderizar IndexedFaceSet."""
 
-        # Processamento das faces baseado em coordIndex
+        # Handle texture cases first
+        if current_texture:
+            image = gpu.GPU.load_texture(current_texture[0])
+            # Apply texture logic here (omitted for now)
+
+        vertex_colors = None  # Will store per-vertex colors if needed
+        
+
+        # Handle case when colors are provided per vertex
+        if colorPerVertex and color and colorIndex:
+            # If we have per-vertex colors, create a list of vertex colors
+            vertex_colors = []
+            for idx in colorIndex:
+                if idx != -1:
+                    # Since color is a flat list, extract RGB values as a triplet
+                    start = idx * 3  # Each color is represented by 3 consecutive floats
+                    rgb = color[start:start + 3]
+                    
+                    
+                    # Convert each component from 0-1 float to 0-255 integer
+                    vertex_colors.append([int(c * 255) for c in rgb])
+                    
+
+        # General case without texture and colors per vertex
+        
+        # First step: parse coordIndex into faces (groups of vertices)
         faces = []
         vertices = []
-
-        # Loop para construir as faces a partir de coordIndex
+        
+        # Collect the faces based on -1 delimiters
         for i in coordIndex:
-            if i == -1 and len(vertices)>0:
-                faces.append(vertices)
-                vertices = []  # Reseta a lista de vértices para a próxima face
+            if i == -1:
+                if vertices:  # If there are vertices collected, add as a face
+                    faces.append(vertices)
+                vertices = []  # Reset for the next face
             else:
-                vertices.append(i)  # Adiciona vértices à face atual
+                vertices.append(i)
 
-        # Criação de strips a partir das faces
+        # Initialize strips for triangle strip set
         strips = []
-        for f in faces:
-            if len(f) < 3:
-                continue  # Ignora faces com menos de 3 vértices (não podem formar triângulos)
 
-            # Gera strips para a face
-            for i in range(1, len(f) - 1):
-                strips.extend([f[0], f[i], f[i + 1], -1])  # Adiciona um strip com final -1
+        # Convert each face into a triangle strip
+        for face in faces:
+            if len(face) < 3:
+                continue  # Skip faces with fewer than 3 vertices
+            
+            # Add triangles in a fan-like pattern from the first vertex
+            strips.extend([face[0], face[i], face[i + 1], -1] for i in range(1, len(face) - 1))
 
-        # Chama a função para desenhar os strips de triângulos
-        GL.indexedTriangleStripSet(coord, strips, colors)
+        # Flatten the list of strips
+        strips_flat = [item for sublist in strips for item in sublist]
+
+        # Call the triangle strip rendering function
+        GL.indexedTriangleStripSet(coord, strips_flat,colors,
+                                colorPerVertex and color and colorIndex, vertex_colors if vertex_colors else colors,colorIndex,
+                                texCoord, texCoordIndex, image if current_texture else None) 
 
     @staticmethod
     def box(size, colors):
