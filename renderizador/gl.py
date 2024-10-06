@@ -73,6 +73,38 @@ class GL:
         gamma = A2/A
 
         return alpha, beta, gamma
+    
+    @staticmethod
+    def mipmap_level(du_dx,du_dy,dv_dx,dv_dy):
+        l = max(np.sqrt(du_dx**2 + dv_dx**2),np.sqrt(du_dy**2 + dv_dy**2))
+        return int(np.log2(l))
+    
+    @staticmethod
+    def generate_mipmap(image):
+        mipmap_levels = [image]
+
+        used_image = image
+        while used_image.shape[0] > 1 and used_image.shape[1] > 1:
+            
+            height = max(1, used_image.shape[0] // 2)
+            width = max(1, used_image.shape[1] // 2)
+
+            
+            reduced_image = np.zeros((height, width, used_image.shape[2]), dtype=used_image.dtype)
+
+            for y in range(height):
+                for x in range(width):
+                    # Average the 2x2 block of pixels
+                    block = used_image[2 * y:2 * y + 2, 2 * x:2 * x + 2]
+                    reduced_image[y, x] = np.mean(block, axis=(0, 1))
+
+            # Append the reduced image to the mipmap levels
+            mipmap_levels.append(reduced_image)
+
+            # Update used_image to the newly reduced image for the next iteration
+            used_image = reduced_image
+
+        return mipmap_levels
 
     @staticmethod
     def setup(width, height, near=0.01, far=1000):
@@ -206,6 +238,9 @@ class GL:
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o TriangleSet2D
         # você pode assumir inicialmente o desenho das linhas com a cor emissiva (emissiveColor).
 
+        if image is not None:
+            mipmaps = GL.generate_mipmap(image)
+
         emissiva = colors['emissiveColor']
         emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
 
@@ -267,6 +302,50 @@ class GL:
                             cg = z * g/zs[1]
                             cb = z * b/zs[2]
                             color_used = [int(cr), int(cg), int(cb)]
+
+                        elif texture_values is not None:
+                            shape = image.shape[0]
+                            u0 = texture_values[6*i]
+                            v0 = texture_values[6*i+1]
+                            u1 = texture_values[6*i+2]
+                            v1 = texture_values[6*i+3]
+                            u2 = texture_values[6*i+4]
+                            v2 = texture_values[6*i+5]
+                            u = alpha*u0 + beta*u1 + gamma*u2
+                            v = alpha*v0 + beta*v1 + gamma*v2
+
+                            # u e v vizinhos
+                            alpha10, beta10, gamma10 = GL.inter_area(x+1, y, x0*2, y0*2, x1*2, y1*2, x2*2, y2*2)
+                            u10 = alpha10*u0 + beta10*u1 + gamma10*u2
+                            v10 = alpha10*v0 + beta10*v1 + gamma10*v2
+
+                            alpha01, beta01, gamma01 = GL.inter_area(x, y+1, x0*2, y0*2, x1*2, y1*2, x2*2, y2*2)
+                            u01 = alpha01*u0 + beta01*u1 + gamma01*u2
+                            v01 = alpha01*v0 + beta01*v1 + gamma01*v2
+
+                            du_dx = shape*(u10 - u)
+                            dv_dx = shape*(v10 - v)
+                            du_dy = shape*(u01 - u)
+                            dv_dy = shape*(v01 - v)
+                            d = GL.mipmap_level(du_dx,du_dy,dv_dx,dv_dy)
+
+                            mipmap_used = mipmaps[d]
+                            mipmap_shape = mipmap_used.shape[0]
+                            
+                            uz0 = u0/zs[0]
+                            vz0 = v0/zs[0]
+                            uz1 = u1/zs[1]
+                            vz1 = v1/zs[1]
+                            uz2 = u2/zs[2]
+                            vz2 = v2/zs[2]
+
+                            u_interpolated = (alpha * uz0 + beta * uz1 + gamma * uz2) / (alpha /zs[0] + beta /zs[1] + gamma /zs[2])
+                            v_interpolated = (alpha * vz0 + beta * vz1 + gamma * vz2) / (alpha /zs[0] + beta /zs[1] + gamma /zs[2])
+
+                            flipped_image = np.flip(mipmap_used[:, :, :3],axis=1)
+                            r, g, b = flipped_image[min(255, int(u_interpolated * mipmap_shape)), min(255, int(v_interpolated * mipmap_shape))]
+
+                            color_used = [min(255,int(r)), min(255,int(g)), min(255,int(b))]
                         else:
                             color_used = emissiva
 
@@ -505,58 +584,54 @@ class GL:
         # Handle texture cases first
         if current_texture:
             image = gpu.GPU.load_texture(current_texture[0])
-            # Apply texture logic here (omitted for now)
-
-        vertex_colors = None  # Will store per-vertex colors if needed
+    
+        vert_colors = None
         
 
-        # Handle case when colors are provided per vertex
+        
         if colorPerVertex and color and colorIndex:
-            # If we have per-vertex colors, create a list of vertex colors
-            vertex_colors = []
+            
+            vert_colors = []
             for idx in colorIndex:
                 if idx != -1:
-                    # Since color is a flat list, extract RGB values as a triplet
-                    start = idx * 3  # Each color is represented by 3 consecutive floats
-                    rgb = color[start:start + 3]
+                    rgb = color[idx*3:idx * 3 + 3]
                     
+                    vert_colors.append([int(c * 255) for c in rgb])
                     
-                    # Convert each component from 0-1 float to 0-255 integer
-                    vertex_colors.append([int(c * 255) for c in rgb])
-                    
-
-        # General case without texture and colors per vertex
         
-        # First step: parse coordIndex into faces (groups of vertices)
+        
         faces = []
         vertices = []
         
-        # Collect the faces based on -1 delimiters
+        
         for i in coordIndex:
             if i == -1:
-                if vertices:  # If there are vertices collected, add as a face
+                if vertices:
                     faces.append(vertices)
-                vertices = []  # Reset for the next face
+                vertices = []
             else:
                 vertices.append(i)
 
-        # Initialize strips for triangle strip set
+       
         strips = []
 
-        # Convert each face into a triangle strip
+        
         for face in faces:
             if len(face) < 3:
-                continue  # Skip faces with fewer than 3 vertices
+                continue
             
-            # Add triangles in a fan-like pattern from the first vertex
-            strips.extend([face[0], face[i], face[i + 1], -1] for i in range(1, len(face) - 1))
+            
+            for i in range(1, len(face) - 1):
+                strips.append([face[0], face[i], face[i + 1], -1])
 
-        # Flatten the list of strips
-        strips_flat = [item for sublist in strips for item in sublist]
+        strips_flat = []
+        for sublist in strips:
+            for item in sublist:
+                strips_flat.append(item)
 
         # Call the triangle strip rendering function
         GL.indexedTriangleStripSet(coord, strips_flat,colors,
-                                colorPerVertex and color and colorIndex, vertex_colors if vertex_colors else colors,colorIndex,
+                                colorPerVertex and color and colorIndex, vert_colors if vert_colors else colors,colorIndex,
                                 texCoord, texCoordIndex, image if current_texture else None) 
 
     @staticmethod
