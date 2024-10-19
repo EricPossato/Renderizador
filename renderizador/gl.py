@@ -641,13 +641,48 @@ class GL:
         # e Z, respectivamente, e cada valor do tamanho deve ser maior que zero. Para desenha
         # essa caixa você vai provavelmente querer tesselar ela em triângulos, para isso
         # encontre os vértices e defina os triângulos.
+        sx, sy, sz = size
+        sx, sy, sz = sx/2, sy/2, sz/2
+        verts = [
+            [-sx, -sy, -sz],
+            [sx, -sy, -sz],
+            [sx, sy, -sz],
+            [-sx, sy, -sz],
+            [-sx, -sy, sz],
+            [sx, -sy, sz],
+            [sx, sy, sz],
+            [-sx, sy, sz]
+        ]
+        faces = [
+            [0, 1, 2, 3],
+            [7, 6, 5, 4],
+            [0, 4, 5, 1],
+            [1, 5, 6, 2],
+            [2, 6, 7, 3],
+            [3, 7, 4, 0]
+        ]
+        triangles = [
+            [0, 1, 2],
+            [0, 2, 3],
+            [7, 6, 5],
+            [7, 5, 4],
+            [0, 4, 5],
+            [0, 5, 1],
+            [1, 5, 6],
+            [1, 6, 2],
+            [2, 6, 7],
+            [2, 7, 3],
+            [3, 7, 4],
+            [3, 4, 0]
+        ]
+        for t in triangles:
+            v1 = verts[t[0]]
+            v2 = verts[t[1]]
+            v3 = verts[t[2]]
+            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Box : size = {0}".format(size)) # imprime no terminal pontos
-        print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+
 
     @staticmethod
     def sphere(radius, colors):
@@ -659,9 +694,33 @@ class GL:
         # precisar tesselar ela em triângulos, para isso encontre os vértices e defina
         # os triângulos.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Sphere : radius = {0}".format(radius)) # imprime no terminal o raio da esfera
-        print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
+        
+        div_long = 15
+        div_lat = 15
+
+        vertices = []
+        delta_theta = 2 * np.pi / div_long
+        delta_phi = np.pi / div_lat
+
+        for i in range(div_long+1):
+            theta = i * delta_theta
+            for j in range(div_lat):
+                phi = j * delta_phi
+                x = radius * np.sin(phi) * np.cos(theta)
+                y = radius * np.sin(phi) * np.sin(theta)
+                z = radius * np.cos(phi)
+                vertices.append([x, y, z])
+
+        for i in range(div_long):
+            for j in range(div_lat-1):
+                v1 = vertices[i * div_lat + j]
+                v2 = vertices[i * div_lat + j + 1]
+                v3 = vertices[(i + 1) * div_lat + j]
+                v4 = vertices[(i + 1) * div_lat + j + 1]
+                GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+                GL.triangleSet([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]], colors)
+        
+
 
     @staticmethod
     def cone(bottomRadius, height, colors):
@@ -674,10 +733,27 @@ class GL:
         # Para desenha esse cone você vai precisar tesselar ele em triângulos, para isso
         # encontre os vértices e defina os triângulos.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Cone : bottomRadius = {0}".format(bottomRadius)) # imprime no terminal o raio da base do cone
-        print("Cone : height = {0}".format(height)) # imprime no terminal a altura do cone
-        print("Cone : colors = {0}".format(colors)) # imprime no terminal as cores
+
+        div_long = 15
+        
+        vertices = []
+        delta_theta = 2 * np.pi / div_long
+
+        for i in range(div_long+1):
+            theta = i * delta_theta
+            x = bottomRadius * np.cos(theta)
+            y = 0
+            z = bottomRadius * np.sin(theta)
+            vertices.append([x, y, z])
+
+        vertices.append([0, height, 0])
+
+        for i in range(div_long):
+            v1 = vertices[i]
+            v2 = vertices[i + 1]
+            v3 = vertices[-1]
+            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+        
 
     @staticmethod
     def cylinder(radius, height, colors):
@@ -690,10 +766,31 @@ class GL:
         # Para desenha esse cilindro você vai precisar tesselar ele em triângulos, para isso
         # encontre os vértices e defina os triângulos.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Cylinder : radius = {0}".format(radius)) # imprime no terminal o raio do cilindro
-        print("Cylinder : height = {0}".format(height)) # imprime no terminal a altura do cilindro
-        print("Cylinder : colors = {0}".format(colors)) # imprime no terminal as cores
+        div_long = 15
+
+        vertices = []
+        delta_theta = 2 * np.pi / div_long
+
+        for i in range(div_long+1):
+            theta = i * delta_theta
+            x = radius * np.cos(theta)
+            y = 0
+            z = radius * np.sin(theta)
+            vertices.append([x, y, z])
+
+        vertices_top = [[v[0], height, v[2]] for v in vertices]
+
+        for i in range(div_long):
+
+            v1 = vertices[i]
+            v2 = vertices[i + 1]
+            v3 = vertices_top[i]
+            v4 = vertices_top[i + 1]
+
+            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+            GL.triangleSet([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]], colors)
+
+
 
     @staticmethod
     def navigationInfo(headlight):
