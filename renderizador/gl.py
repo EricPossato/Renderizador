@@ -889,29 +889,35 @@ class GL:
         # encontre os vértices e defina os triângulos.
 
         div_long = 15
+        div_lat = 15
 
         vertices = []
         delta_theta = 2 * np.pi / div_long
+        delta_phi = height / div_lat
 
         for i in range(div_long+1):
             theta = i * delta_theta
-            x = radius * np.cos(theta)
-            y = 0
-            z = radius * np.sin(theta)
-            vertices.append([x, y, z])
-
-        vertices_top = [[v[0], height, v[2]] for v in vertices]
+            for j in range(div_lat+1):
+                phi = j * delta_phi
+                x = radius * np.cos(theta)
+                y = phi - height/2
+                z = radius * np.sin(theta)
+                vertices.append([x, y, z])
 
         for i in range(div_long):
+            for j in range(div_lat):
+                p1 = i * (div_lat+1) + j
+                p2 = p1 + 1
+                p3 = (i + 1) * (div_lat+1) + j
+                p4 = p3 + 1
 
-            v1 = vertices[i]
-            v2 = vertices[i + 1]
-            v3 = vertices_top[i]
-            v4 = vertices_top[i + 1]
+                v1 = vertices[p1]
+                v2 = vertices[p2]
+                v3 = vertices[p3]
+                v4 = vertices[p4]
 
-            GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
-            GL.triangleSet([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]], colors)
-
+                GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
+                GL.triangleSet([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]], colors)
 
 
     @staticmethod
