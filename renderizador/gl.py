@@ -119,6 +119,7 @@ class GL:
         GL.stack = [np.identity(4)]
         GL.supersampling = np.zeros((GL.width*2, GL.height*2, 3))
         GL.zBuffer = - np.inf * np.ones((GL.width*2, GL.height*2))
+        GL.directional_light = {"direction": np.array([0, 0, -1]), "color": np.array([1, 1, 1]), "intensity": 0}
 
     @staticmethod
     def pushMatrix(matrix):
@@ -228,7 +229,8 @@ class GL:
     def triangleSet2D(vertices, colors,
                     colorPerVertex = False,vertexColors = None ,z_values = None,
                     texture_values = None,image = None,
-                    transparency = 0):
+                    transparency = 0,
+                    normals = None):
         """Função usada para renderizar TriangleSet2D."""
         # Nessa função você receberá os vertices de um triângulo no parâmetro vertices,
         # esses pontos são uma lista de pontos x, y sempre na ordem. Assim point[0] é o
@@ -243,6 +245,17 @@ class GL:
 
         emissiva = colors['emissiveColor']
         emissiva = [int(emissiva[0]*255), int(emissiva[1]*255), int(emissiva[2]*255)]
+
+        diffuse = colors['diffuseColor']
+        diffuse = [int(diffuse[0]*255), int(diffuse[1]*255), int(diffuse[2]*255)]
+
+        specular = colors['specularColor']
+        specular = [int(specular[0]*255), int(specular[1]*255), int(specular[2]*255)]
+
+        shininess = colors['shininess']
+        
+        lighting = GL.directional_light["intensity"]
+        
 
         def L(p0, p1, ponto):
 
@@ -347,7 +360,19 @@ class GL:
 
                             color_used = [min(255,int(r)), min(255,int(g)), min(255,int(b))]
                         else:
-                            color_used = emissiva
+                            if not lighting:
+                                color_used = emissiva
+                            else:
+                                cos = np.dot(normals, GL.directional_light["direction"])
+                                cos = np.clip(cos, 0, 1)
+            
+                                intensity = GL.directional_light["intensity"] * cos
+                                diffuse_lighting = intensity * np.array(diffuse)
+                                
+                                color_used = emissiva + diffuse_lighting
+                                #color_used = [int((i+1)*127.5) for i in normals[0]]
+                                #color_used = [int((i+1)*127.5) for i in GL.directional_light["direction"]]
+                                color_used = np.clip(color_used, 0, 255)
 
                         current_color = GL.supersampling[x][y]
                         color_used = [
@@ -397,7 +422,12 @@ class GL:
             tri_mat = np.array([x, y, z, [1, 1, 1]])
             
             tri_mat = tranform_matrix @ tri_mat
-            z_values = (GL.look_at @ tri_mat)[2][0]
+            operated_tri = GL.look_at @ tri_mat
+
+            normal = np.cross(operated_tri[:3].transpose()[1] - operated_tri[:3].transpose()[0], operated_tri[:3].transpose()[2] - operated_tri[:3].transpose()[0])
+            normal = -normal / np.linalg.norm(normal)
+            
+            z_values = operated_tri[2][0]
             tri_mat = GL.perspective_matrix @ tri_mat
             tri_mat = tri_mat / tri_mat[3][0]
             screen_matrix = to_screen_matrix @ tri_mat
@@ -415,7 +445,8 @@ class GL:
                 np.array(z_values)[0],
                 texture_values[6*i:6*i+6] if texture_values is not None else None,
                 image = image,
-                transparency = transparencia
+                transparency = transparencia,
+                normals = normal
                 )
 
     @staticmethod
@@ -644,36 +675,29 @@ class GL:
         sx, sy, sz = size
         sx, sy, sz = sx/2, sy/2, sz/2
         verts = [
-            [-sx, -sy, -sz],
-            [sx, -sy, -sz],
-            [sx, sy, -sz],
-            [-sx, sy, -sz],
             [-sx, -sy, sz],
             [sx, -sy, sz],
             [sx, sy, sz],
-            [-sx, sy, sz]
+            [-sx, sy, sz],
+            [-sx, -sy, -sz],
+            [sx, -sy, -sz],
+            [sx, sy, -sz],
+            [-sx, sy, -sz]
         ]
-        faces = [
-            [0, 1, 2, 3],
-            [7, 6, 5, 4],
-            [0, 4, 5, 1],
-            [1, 5, 6, 2],
-            [2, 6, 7, 3],
-            [3, 7, 4, 0]
-        ]
+
         triangles = [
             [0, 1, 2],
             [0, 2, 3],
-            [7, 6, 5],
-            [7, 5, 4],
-            [0, 4, 5],
-            [0, 5, 1],
-            [1, 5, 6],
-            [1, 6, 2],
-            [2, 6, 7],
-            [2, 7, 3],
-            [3, 7, 4],
-            [3, 4, 0]
+            [4, 6, 5],
+            [4, 7, 6],
+            [3, 2, 6],
+            [3, 6, 7],
+            [0, 4, 1],
+            [1, 4, 5],
+            [1, 5, 2],
+            [2, 5, 6],
+            [0, 3, 7],
+            [0, 7, 4]
         ]
         for t in triangles:
             v1 = verts[t[0]]
@@ -802,6 +826,9 @@ class GL:
         # A luz headlight deve ser direcional, ter intensidade = 1, cor = (1 1 1),
         # ambientIntensity = 0,0 e direção = (0 0 −1).
 
+        if headlight:
+            GL.directionalLight(0, [1, 1, 1], 1, [0, 0, -1])
+
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
 
@@ -814,6 +841,13 @@ class GL:
         # cor, intensidade. O campo de direção especifica o vetor de direção da iluminação
         # que emana da fonte de luz no sistema de coordenadas local. A luz é emitida ao
         # longo de raios paralelos de uma distância infinita.
+
+        GL.directional_light = {
+            "ambientIntensity": ambientIntensity,
+            "color": color, 
+            "intensity": intensity, 
+            "direction": np.array(direction)
+            }
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("DirectionalLight : ambientIntensity = {0}".format(ambientIntensity))
