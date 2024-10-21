@@ -230,7 +230,8 @@ class GL:
                     colorPerVertex = False,vertexColors = None ,z_values = None,
                     texture_values = None,image = None,
                     transparency = 0,
-                    normals = None):
+                    normals = None,
+                    v = None):
         """Função usada para renderizar TriangleSet2D."""
         # Nessa função você receberá os vertices de um triângulo no parâmetro vertices,
         # esses pontos são uma lista de pontos x, y sempre na ordem. Assim point[0] é o
@@ -368,16 +369,31 @@ class GL:
                                     normal = normals[0]
                                 else:
                                     normal = np.array(alpha*normals[:,0] + beta*normals[:,1] + gamma*normals[:,2]).T[0]
-                                    normal = -normal / np.linalg.norm(normal)
-                                cos = np.dot(normal, GL.directional_light["direction"])
-                                cos = np.clip(cos, 0, 1)
+                                    normal = normal / np.linalg.norm(normal)
+                                cos_normal_light = np.dot(normal, GL.directional_light["direction"])
+                                cos_normal_light = np.clip(cos_normal_light, 0, 1)
+
+                                view_vector = alpha*v[0] + beta*v[1] + gamma*v[2]
+                                view_vector = view_vector / np.linalg.norm(view_vector)
+
+                                h = -GL.directional_light["direction"] + view_vector
+                                h = h / np.linalg.norm(h)
+                                
+                                cos_normal_h = np.dot(-normal, h)
+                                cos_normal_h = np.clip(cos_normal_h, 0, 1)
             
-                                intensity = GL.directional_light["intensity"] * cos
+                                intensity = GL.directional_light["intensity"] * cos_normal_light
                                 diffuse_lighting = intensity * np.array(diffuse)
                                 
-                                color_used = emissiva + diffuse_lighting
+                                specular_lighting = GL.directional_light["intensity"]  * (cos_normal_h ** (shininess*128))
+                                #print(f"specular_lighting: {specular_lighting}")
+                                specular_lighting = [int(i) for i in specular_lighting * np.array(specular)]
+                                
+
+                                color_used = emissiva + diffuse_lighting + specular_lighting
                                 #color_used = [int((i+1)*127.5) for i in normal]
-                                #color_used = [int((i+1)*127.5) for i in GL.directional_light["direction"]]
+                                #color_used = [int((i+1)*127.5) for i in h]
+                                #color_used = [int(cos_normal_h*255), int(cos_normal_h*255), int(cos_normal_h*255)]
                                 color_used = np.clip(color_used, 0, 255)
 
                         current_color = GL.supersampling[x][y]
@@ -420,6 +436,8 @@ class GL:
         n_triangles = len(point) // 9
         tranform_matrix = GL.getMatrix()
         to_screen_matrix = GL.to_screen_matrix(GL.width, GL.height)
+        lighting = GL.directional_light["intensity"]
+
         for i in range(0, n_triangles):
             p = point[i*9:i*9+9]
             x = p[0:9:3]
@@ -444,7 +462,7 @@ class GL:
 
                 transformed_matrix = transformed_matrix[:3]
 
-                normal = transformed_matrix
+                normal = -transformed_matrix
 
             else:
                 normal = np.cross(operated_tri[:3].transpose()[1] - operated_tri[:3].transpose()[0], operated_tri[:3].transpose()[2] - operated_tri[:3].transpose()[0])
@@ -457,6 +475,12 @@ class GL:
             screen_matrix = to_screen_matrix @ tri_mat
 
             screen_matrix = np.array(screen_matrix)
+            
+            v1 = -1 * np.array(operated_tri[:3, 0]).flatten() / np.linalg.norm(operated_tri[:3, 0])
+            v2 = -1 * np.array(operated_tri[:3, 1]).flatten() / np.linalg.norm(operated_tri[:3, 1])
+            v3 = -1 * np.array(operated_tri[:3, 2]).flatten() / np.linalg.norm(operated_tri[:3, 2])
+            v = [v1, v2, v3]
+
             GL.triangleSet2D(
                 [
                     screen_matrix[0][0], screen_matrix[1][0],
@@ -470,7 +494,8 @@ class GL:
                 texture_values[6*i:6*i+6] if texture_values is not None else None,
                 image = image,
                 transparency = transparencia,
-                normals = normal
+                normals = normal,
+                v = v if lighting else None
                 )
 
     @staticmethod
