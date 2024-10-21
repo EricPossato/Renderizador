@@ -927,8 +927,6 @@ class GL:
         if headlight:
             GL.directionalLight(0, [1, 1, 1], 1, [0, 0, -1])
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
 
     @staticmethod
     def directionalLight(ambientIntensity, color, intensity, direction):
@@ -947,11 +945,6 @@ class GL:
             "direction": np.array(direction)
             }
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("DirectionalLight : ambientIntensity = {0}".format(ambientIntensity))
-        print("DirectionalLight : color = {0}".format(color)) # imprime no terminal
-        print("DirectionalLight : intensity = {0}".format(intensity)) # imprime no terminal
-        print("DirectionalLight : direction = {0}".format(direction)) # imprime no terminal
 
     @staticmethod
     def pointLight(ambientIntensity, color, intensity, location):
@@ -1025,11 +1018,6 @@ class GL:
         # como fechada, com uma transições da última chave para a primeira chave. Se os keyValues
         # na primeira e na última chave não forem idênticos, o campo closed será ignorado.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("SplinePositionInterpolator : set_fraction = {0}".format(set_fraction))
-        print("SplinePositionInterpolator : key = {0}".format(key)) # imprime no terminal
-        print("SplinePositionInterpolator : keyValue = {0}".format(keyValue))
-        print("SplinePositionInterpolator : closed = {0}".format(closed))
 
         # Abaixo está só um exemplo de como os dados podem ser calculados e transferidos
         initial_key = 0
@@ -1102,13 +1090,38 @@ class GL:
         # zeroa a um. O campo keyValue deve conter exatamente tantas rotações 3D quanto os
         # quadros-chave no key.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("OrientationInterpolator : set_fraction = {0}".format(set_fraction))
-        print("OrientationInterpolator : key = {0}".format(key)) # imprime no terminal
-        print("OrientationInterpolator : keyValue = {0}".format(keyValue))
+
+        initial_key = 0
+        end_key = 1
+        for i in range(len(key) - 1):
+            if key[i] <= set_fraction <= key[i + 1]:
+                initial_key = i
+                end_key = i + 1
+                break
+
+        key = np.array(key)
+        keyValue = np.array(keyValue).reshape(-1, 4)
+
+        ri = keyValue[initial_key]
+        rf = keyValue[end_key]
+        
+        s = (set_fraction - key[initial_key])/(key[end_key] - key[initial_key])
+
+        axis_i = ri[:3]/np.linalg.norm(ri[:3])
+        axis_f = rf[:3]/np.linalg.norm(rf[:3])
+
+        angle_i = ri[3]
+        angle_f = rf[3]
+
+        if not np.allclose(axis_i, axis_f):
+            axis_f = axis_i
+
+        interpolated_angle = (1 - s) * angle_i + s * angle_f
+
+        
 
         # Abaixo está só um exemplo de como os dados podem ser calculados e transferidos
-        value_changed = [0, 0, 1, 0]
+        value_changed = np.concatenate([axis_f, [interpolated_angle]])
 
         return value_changed
 
