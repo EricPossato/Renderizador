@@ -363,14 +363,20 @@ class GL:
                             if not lighting:
                                 color_used = emissiva
                             else:
-                                cos = np.dot(normals, GL.directional_light["direction"])
+                                #check if all 3 elements of normals are the same
+                                if np.all(normals[0] == normals[1]) and np.all(normals[0] == normals[2]):
+                                    normal = normals[0]
+                                else:
+                                    normal = np.array(alpha*normals[:,0] + beta*normals[:,1] + gamma*normals[:,2]).T[0]
+                                    normal = -normal / np.linalg.norm(normal)
+                                cos = np.dot(normal, GL.directional_light["direction"])
                                 cos = np.clip(cos, 0, 1)
             
                                 intensity = GL.directional_light["intensity"] * cos
                                 diffuse_lighting = intensity * np.array(diffuse)
                                 
                                 color_used = emissiva + diffuse_lighting
-                                #color_used = [int((i+1)*127.5) for i in normals[0]]
+                                #color_used = [int((i+1)*127.5) for i in normal]
                                 #color_used = [int((i+1)*127.5) for i in GL.directional_light["direction"]]
                                 color_used = np.clip(color_used, 0, 255)
 
@@ -396,7 +402,7 @@ class GL:
                         
     @staticmethod
     def triangleSet(point, colors,colorPerVertex = False,vertexColors = None,
-                    texture_values = None,image = None):
+                    texture_values = None,image = None, normals = None):
         """Função usada para renderizar TriangleSet."""
         # Nessa função você receberá pontos no parâmetro point, esses pontos são uma lista
         # de pontos x, y, e z sempre na ordem. Assim point[0] é o valor da coordenada x do
@@ -423,10 +429,28 @@ class GL:
             
             tri_mat = tranform_matrix @ tri_mat
             operated_tri = GL.look_at @ tri_mat
+            if normals is not None:
+                normal = normals
+                normal_0 = np.matrix(normal[9*i:9*i+3]).T
+                normal_1 = np.matrix(normal[9*i+3:9*i+6]).T
+                normal_2 = np.matrix(normal[9*i+6:9*i+9]).T
 
-            normal = np.cross(operated_tri[:3].transpose()[1] - operated_tri[:3].transpose()[0], operated_tri[:3].transpose()[2] - operated_tri[:3].transpose()[0])
-            normal = -normal / np.linalg.norm(normal)
-            
+                normal_0 = np.vstack((normal_0, [0]))
+                normal_1 = np.vstack((normal_1, [0]))
+                normal_2 = np.vstack((normal_2, [0]))
+
+                normal_matrix = np.hstack((normal_0, normal_1, normal_2))
+                transformed_matrix = np.linalg.inv(GL.look_at @ tranform_matrix).T @ normal_matrix
+
+                transformed_matrix = transformed_matrix[:3]
+
+                normal = transformed_matrix
+
+            else:
+                normal = np.cross(operated_tri[:3].transpose()[1] - operated_tri[:3].transpose()[0], operated_tri[:3].transpose()[2] - operated_tri[:3].transpose()[0])
+                normal = -normal / np.linalg.norm(normal)
+                normal = np.array([normal, normal, normal])
+
             z_values = operated_tri[2][0]
             tri_mat = GL.perspective_matrix @ tri_mat
             tri_mat = tri_mat / tri_mat[3][0]
@@ -726,7 +750,9 @@ class GL:
         delta_theta = 2 * np.pi / div_long
         delta_phi = np.pi / div_lat
         triangulos = []
-
+        normals = []
+        t_normals = []
+        
         for i in range(div_long+1):
             theta = i * delta_theta
             for j in range(1,div_lat):
@@ -735,29 +761,45 @@ class GL:
                 y = radius * np.sin(phi) * np.sin(theta)
                 z = radius * np.cos(phi)
                 vertices.append([x, y, z])
+                normals.append(np.array([x, y, z])/np.linalg.norm([x, y, z]))
 
         vertices.append([0, 0, radius])
+        normals.append(np.array([0, 0, 1]))
+
         vertices.append([0, 0, -radius])
+        normals.append(np.array([0, 0, -1]))
 
         polo_norte = len(vertices) - 2
         polo_sul = len(vertices) - 1
         
         for i in range(div_long):
             for j in range(div_lat-2):
-                v1 = vertices[i * (div_lat-1) + j]
-                v2 = vertices[i * (div_lat-1) + j + 1]
-                v3 = vertices[(i + 1) * (div_lat-1) + j]
-                v4 = vertices[(i + 1) * (div_lat-1) + j + 1]
+                p1 = i * (div_lat-1) + j
+                p2 = p1 +1
+                p3 = (i + 1) * (div_lat-1) + j
+                p4 = p3 + 1
+
+                v1 = vertices[p1]
+                v2 = vertices[p2]
+                v3 = vertices[p3]
+                v4 = vertices[p4]
 
                 triangulos.extend([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]])
+                t_normals.append([normals[p1],normals[p2],normals[p3]])
                 v2, v3, v4 = v3, v2, v4
                 triangulos.extend([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]])
+                t_normals.append([normals[p3],normals[p2],normals[p4]])
         
             v1 = vertices[polo_norte] 
             v2 = vertices[i * (div_lat-1)]
             v3 = vertices[(i + 1) % div_long* (div_lat-1)]
 
             triangulos.extend([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]])
+            t_normals.append([
+                normals[polo_norte],
+                normals[i * (div_lat-1)],
+                normals[(i + 1) % div_long* (div_lat-1)]
+                ])
 
 
             v1 = vertices[polo_sul]
@@ -765,8 +807,13 @@ class GL:
             v3 = vertices[i * (div_lat-1) + div_lat-2]
 
             triangulos.extend([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]])
-
-        GL.triangleSet(triangulos, colors)
+            t_normals.append([
+                normals[polo_sul],
+                normals[(i + 1) * (div_lat-1) + div_lat-2],
+                normals[i * (div_lat-1) + div_lat-2]
+                ])
+        
+        GL.triangleSet(triangulos, colors, normals = np.array(t_normals).flatten())
 
         
 
