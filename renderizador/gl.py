@@ -725,24 +725,49 @@ class GL:
         vertices = []
         delta_theta = 2 * np.pi / div_long
         delta_phi = np.pi / div_lat
+        triangulos = []
 
         for i in range(div_long+1):
             theta = i * delta_theta
-            for j in range(div_lat):
+            for j in range(1,div_lat):
                 phi = j * delta_phi
                 x = radius * np.sin(phi) * np.cos(theta)
                 y = radius * np.sin(phi) * np.sin(theta)
                 z = radius * np.cos(phi)
                 vertices.append([x, y, z])
 
+        vertices.append([0, 0, radius])
+        vertices.append([0, 0, -radius])
+
+        polo_norte = len(vertices) - 2
+        polo_sul = len(vertices) - 1
+        
         for i in range(div_long):
-            for j in range(div_lat-1):
-                v1 = vertices[i * div_lat + j]
-                v2 = vertices[i * div_lat + j + 1]
-                v3 = vertices[(i + 1) * div_lat + j]
-                v4 = vertices[(i + 1) * div_lat + j + 1]
-                GL.triangleSet([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]], colors)
-                GL.triangleSet([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]], colors)
+            for j in range(div_lat-2):
+                v1 = vertices[i * (div_lat-1) + j]
+                v2 = vertices[i * (div_lat-1) + j + 1]
+                v3 = vertices[(i + 1) * (div_lat-1) + j]
+                v4 = vertices[(i + 1) * (div_lat-1) + j + 1]
+
+                triangulos.extend([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]])
+                v2, v3, v4 = v3, v2, v4
+                triangulos.extend([v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], v4[0], v4[1], v4[2]])
+        
+            v1 = vertices[polo_norte] 
+            v2 = vertices[i * (div_lat-1)]
+            v3 = vertices[(i + 1) % div_long* (div_lat-1)]
+
+            triangulos.extend([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]])
+
+
+            v1 = vertices[polo_sul]
+            v2 = vertices[(i + 1) * (div_lat-1) + div_lat-2]
+            v3 = vertices[i * (div_lat-1) + div_lat-2]
+
+            triangulos.extend([v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]])
+
+        GL.triangleSet(triangulos, colors)
+
         
 
 
