@@ -120,6 +120,7 @@ class GL:
         GL.supersampling = np.zeros((GL.width*2, GL.height*2, 3))
         GL.zBuffer = - np.inf * np.ones((GL.width*2, GL.height*2))
         GL.directional_light = {"direction": np.array([0, 0, -1]), "color": np.array([1, 1, 1]), "intensity": 0}
+        GL.start_time = time.time()
 
     @staticmethod
     def pushMatrix(matrix):
@@ -542,14 +543,14 @@ class GL:
         
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         #print("Transform : ", end='')
-        if translation:
-            GL.translation = translation
+        if translation is not None:
+            GL.translation = np.array(translation).flatten()
             #print("translation = {0} ".format(translation), end='') # imprime no terminal
         if scale:
             GL.scale = scale
             #print("scale = {0} ".format(scale), end='') # imprime no terminal
-        if rotation:
-            GL.rotation = rotation
+        if rotation is not None:
+            GL.rotation = np.array(rotation).flatten()
             #print("rotation = {0} ".format(rotation), end='') # imprime no terminal
         translation_matrix = GL.trans_matrix(GL.translation[0], GL.translation[1], GL.translation[2])
         rotation_matrix = GL.rot_matrix(GL.rotation[:3], GL.rotation[3])
@@ -998,13 +999,17 @@ class GL:
 
         # Deve retornar a fração de tempo passada em fraction_changed
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("TimeSensor : cycleInterval = {0}".format(cycleInterval)) # imprime no terminal
-        print("TimeSensor : loop = {0}".format(loop))
+        GL.supersampling.fill(0)
+        GL.zBuffer.fill(-np.inf)
+
 
         # Esse método já está implementado para os alunos como exemplo
-        epoch = time.time()  # time in seconds since the epoch as a floating point number.
-        fraction_changed = (epoch % cycleInterval) / cycleInterval
+        epoch = time.time()  # time in seconds since the epoch as a floating point number.  
+        if loop:
+            fraction_changed = ((epoch - GL.start_time) % cycleInterval) / cycleInterval
+        else:
+            fraction_changed = np.clip((epoch - GL.start_time) / cycleInterval, 0, 1)
+
 
         return fraction_changed
 
@@ -1027,8 +1032,59 @@ class GL:
         print("SplinePositionInterpolator : closed = {0}".format(closed))
 
         # Abaixo está só um exemplo de como os dados podem ser calculados e transferidos
-        value_changed = [0.0, 0.0, 0.0]
-        
+        initial_key = 0
+        end_key = 1
+        for i in range(len(key) - 1):
+            if key[i] <= set_fraction <= key[i + 1]:
+                initial_key = i
+                end_key = i + 1
+                break
+
+        key = np.array(key)
+        keyValue = np.array(keyValue).reshape(-1, 3)
+
+        d_key = key[end_key] - key[initial_key]
+        s = (set_fraction - key[initial_key])/d_key
+        s_matrix = np.array([
+            s**3,
+            s**2,
+            s,
+            1
+        ])
+
+        if key[initial_key] == 0:
+            if closed:
+                d0 = keyValue[initial_key+1] - keyValue[-1]
+            else :
+                d0 = np.array([0, 0, 0])
+        else:
+            d0 = keyValue[initial_key+1] - keyValue[initial_key-1]
+
+        if key[end_key] == 1:
+            if closed:
+                d1 = keyValue[0] - keyValue[end_key-1]
+            else :
+                d1 = np.array([0, 0, 0])
+        else:
+            d1 = keyValue[end_key+1] - keyValue[end_key-1]
+
+        print(f'KeyValues: {keyValue[initial_key]} {keyValue[end_key]} {d0} {d1}')
+        c_matrix = np.array([
+            keyValue[initial_key],
+            keyValue[end_key],
+            d0,
+            d1
+        ])
+
+        hermite_matrix = np.array([
+            [2, -2, 1, 1],
+            [-3, 3, -2, -1],
+            [0, 0, 1, 0],
+            [1, 0, 0, 0]
+        ])
+
+        value_changed = s_matrix @ hermite_matrix @ c_matrix
+
         return value_changed
 
     @staticmethod
