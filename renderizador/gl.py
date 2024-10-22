@@ -864,11 +864,11 @@ class GL:
         for i in range(div_long+1):
             theta = i * delta_theta
             x = bottomRadius * np.cos(theta)
-            y = 0
+            y = -height/2
             z = bottomRadius * np.sin(theta)
             vertices.append([x, y, z])
 
-        vertices.append([0, height, 0])
+        vertices.append([0, height/2, 0])
 
         for i in range(div_long):
             v1 = vertices[i]
